@@ -14,7 +14,7 @@ import tempfile
 import filetype
 import hashlib
 from dataclasses import dataclass, field
-from subprocess import run
+from subprocess import run, CalledProcessError
 from typing import TypedDict, NotRequired, Literal, Final
 from urllib.parse import urlparse
 
@@ -159,9 +159,20 @@ def parse_cli_args():
     return parser.parse_args()
 
 
-def registry_has_image(image: str) -> bool:
+def fetch_image_manifest(image: str) -> dict | None:
+    """Fetch image manifest from remote registry.
+
+    :param image: str, fetch manifest for this image.
+    :return: A dict object representing the fetched manifest. If the given image does not exist
+        in the registry, None is returned.
+    """
     cmd = ["skopeo", "inspect", "--raw", f"docker://{image}"]
-    return run(cmd, capture_output=True).returncode == 0
+    proc = run(cmd, text=True, capture_output=True)
+    if proc.returncode != 0:
+        if proc.stderr.endswith(" manifest unknown"):
+            return None
+        raise CalledProcessError(proc.returncode, cmd, stderr=proc.stderr)
+    return json.loads(proc.stdout)
 
 
 def fetch_image_config(image: str) -> str:
@@ -480,7 +491,7 @@ def resolve_source_image_by_version_release(binary_image: str) -> str | None:
         return
     # Remove possible tag or digest from binary image
     source_image = f"{name}:{version}-{release}-source"
-    if registry_has_image(source_image):
+    if fetch_image_manifest(source_image) is not None:
         return source_image
 
 

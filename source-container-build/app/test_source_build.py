@@ -489,7 +489,7 @@ class TestPrepareBaseImageSources(unittest.TestCase):
                     )
                     return Mock(stdout=partial_config)
                 if cmd[2] == "--raw":
-                    return Mock(returncode=0)
+                    return Mock(returncode=0, stdout=json.dumps({"schemaVersion": 2}))
 
             if skopeo_cmd == ["skopeo", "copy"]:
                 # Write manifest.json to test the empty image (empty layers)
@@ -550,7 +550,7 @@ class TestPrepareBaseImageSources(unittest.TestCase):
                     )
                     return Mock(stdout=partial_config)
                 if cmd[2] == "--raw":
-                    return Mock(returncode=0)
+                    return Mock(returncode=0, stdout=json.dumps({"schemaVersion": 2}))
 
             if skopeo_cmd == ["skopeo", "copy"]:
                 manifest = {
@@ -634,9 +634,7 @@ class TestPrepareBaseImageSources(unittest.TestCase):
                 return Mock(stdout=partial_config)
 
             if cmd[2] == "--raw":
-                rv = Mock()
-                rv.returncode = 0
-                return rv
+                return Mock(returncode=0, stdout=json.dumps({"schemaVersion": 2}))
 
             if skopeo_cmd == ["skopeo", "copy"]:
                 # let_it_gather_parent_image_sources(dest_dir, tarfile_open)
@@ -1029,7 +1027,7 @@ class TestBuildProcess(unittest.TestCase):
 
                 if cmd[2] == "--raw":
                     # Indicate the source image of parent image exists
-                    return Mock(returncode=0)
+                    return Mock(returncode=0, stdout=json.dumps({"schemaVersion": 2}))
 
                 if cmd[2] == "--format":
                     mock = Mock()
@@ -1345,8 +1343,7 @@ class TestResolveSourceImageByVersionRelease(unittest.TestCase):
         skopeo_inspect_config_rv.stdout = json.dumps(
             {"config": {"Labels": {"version": "9.3", "release": "1"}}}
         )
-        skopeo_inspect_raw_rv = Mock()
-        skopeo_inspect_raw_rv.returncode = 1
+        skopeo_inspect_raw_rv = Mock(returncode=1, stderr=": manifest unknown")
         run.side_effect = [skopeo_inspect_config_rv, skopeo_inspect_raw_rv]
 
         result = source_build.resolve_source_image_by_version_release(OUTPUT_BINARY_IMAGE)
@@ -1358,8 +1355,7 @@ class TestResolveSourceImageByVersionRelease(unittest.TestCase):
         skopeo_inspect_config_rv.stdout = json.dumps(
             {"config": {"Labels": {"version": "9.3", "release": "1"}}}
         )
-        skopeo_inspect_raw_rv = Mock()
-        skopeo_inspect_raw_rv.returncode = 0
+        skopeo_inspect_raw_rv = Mock(returncode=0, stdout=json.dumps({"schemaVersion": 2}))
         run.side_effect = [skopeo_inspect_config_rv, skopeo_inspect_raw_rv]
 
         source_image = source_build.resolve_source_image_by_version_release(OUTPUT_BINARY_IMAGE)
@@ -1382,3 +1378,28 @@ class TestResolveSourceImageByVersionRelease(unittest.TestCase):
 )
 def test_parse_image_name(image_pullspec, expected):
     assert expected == source_build.parse_image_name(image_pullspec)
+
+
+class TestFetchImageManifest(unittest.TestCase):
+    """Test fetching image manifest"""
+
+    @patch("source_build.run")
+    def test_manifest_is_fetched(self, run: MagicMock):
+        run.return_value = Mock(returncode=0, stdout=json.dumps({"schemaVersion": 2}))
+        manifest = source_build.fetch_image_manifest(OUTPUT_BINARY_IMAGE)
+        self.assertIsNotNone(manifest)
+
+    @patch("source_build.run")
+    def test_manifest_is_unknown(self, run: MagicMock):
+        run.return_value = Mock(returncode=1, stderr=": manifest unknown")
+        manifest = source_build.fetch_image_manifest(OUTPUT_BINARY_IMAGE)
+        self.assertIsNone(manifest)
+
+    @patch("source_build.run")
+    def test_process_failure(self, run: MagicMock):
+        run.return_value = Mock(returncode=1, stderr="something is wrong")
+        with self.assertRaises(CalledProcessError) as ctx:
+            _ = source_build.fetch_image_manifest(OUTPUT_BINARY_IMAGE)
+        e = ctx.exception
+        self.assertEqual(e.returncode, 1)
+        self.assertEqual(e.stderr, "something is wrong")
