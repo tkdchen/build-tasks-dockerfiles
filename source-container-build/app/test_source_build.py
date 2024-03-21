@@ -1396,7 +1396,8 @@ class TestFetchImageManifest(unittest.TestCase):
         self.assertIsNone(manifest)
 
     @patch("source_build.run")
-    def test_process_failure(self, run: MagicMock):
+    @patch("time.sleep")  # for backoff
+    def test_process_failure(self, sleep, run: MagicMock):
         run.return_value = Mock(returncode=1, stderr="something is wrong")
         with self.assertRaises(CalledProcessError) as ctx:
             _ = source_build.fetch_image_manifest(OUTPUT_BINARY_IMAGE)

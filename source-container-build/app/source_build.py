@@ -13,6 +13,7 @@ import tarfile
 import tempfile
 import filetype
 import hashlib
+import backoff
 from dataclasses import dataclass, field
 from subprocess import run, CalledProcessError
 from typing import TypedDict, NotRequired, Literal, Final
@@ -24,6 +25,7 @@ Requires: git, skopeo, tar, BuildSourceImage
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s:%(name)s:%(levelname)s:%(message)s")
 logger = logging.getLogger("source-build")
+backoff_logger = logging.getLogger("source-build.backoff")
 
 BSI: Final = "/opt/BuildSourceImage/bsi"
 BSI_DRV_RPM_DIR: Final = "sourcedriver_rpm_dir"
@@ -37,6 +39,8 @@ ARCHIVE_MIMETYPES = (
     "application/x-xz",
     "application/zip",
 )
+
+MAX_RETRIES: Final = 5
 
 
 class BuildResult(TypedDict):
@@ -159,6 +163,9 @@ def parse_cli_args():
     return parser.parse_args()
 
 
+@backoff.on_exception(
+    backoff.expo, CalledProcessError, max_tries=MAX_RETRIES, logger=backoff_logger
+)
 def fetch_image_manifest(image: str) -> dict | None:
     """Fetch image manifest from remote registry.
 
@@ -175,14 +182,33 @@ def fetch_image_manifest(image: str) -> dict | None:
     return json.loads(proc.stdout)
 
 
+@backoff.on_exception(
+    backoff.expo, CalledProcessError, max_tries=MAX_RETRIES, logger=backoff_logger
+)
 def fetch_image_config(image: str) -> str:
     cmd = ["skopeo", "inspect", "--config", f"docker://{image}"]
     return run(cmd, check=True, text=True, capture_output=True).stdout.strip()
 
 
+@backoff.on_exception(
+    backoff.expo, CalledProcessError, max_tries=MAX_RETRIES, logger=backoff_logger
+)
 def fetch_image_manifest_digest(image: str) -> str:
     cmd = ["skopeo", "inspect", "--format", "{{.Digest}}", "--no-tags", f"docker://{image}"]
     return run(cmd, check=True, text=True, capture_output=True).stdout.strip()
+
+
+@backoff.on_exception(
+    backoff.expo, CalledProcessError, max_tries=MAX_RETRIES, logger=backoff_logger
+)
+def copy_image(src: str, dest: str, digest_file: str = "") -> None:
+    cmd = ["skopeo", "copy"]
+    if digest_file:
+        cmd.append("--digestfile")
+        cmd.append(digest_file)
+    cmd.append(src)
+    cmd.append(dest)
+    run(cmd, check=True)
 
 
 # produces an artifact name that includes artifact's architecture
@@ -237,13 +263,12 @@ def prepare_base_image_sources(
         )
         return False
 
-    cmd = ["skopeo", "copy", f"docker://{source_image_name}", f"dir:{base_sources_extraction_dir}"]
     log.info(
         "Copy source image %s into directory %s",
         source_image_name,
         str(base_sources_extraction_dir),
     )
-    run(cmd, check=True)
+    copy_image(f"docker://{source_image_name}", f"dir:{base_sources_extraction_dir}")
 
     # bsi reads source RPMs from this directory
     bsi_rpms_dir = create_dir(base_image_sources_dir, "bsi_rpms_dir")
@@ -443,16 +468,12 @@ def build_and_push(
     fd, digest_file = tempfile.mkstemp()
     os.close(fd)
     for dest_image in dest_images:
-        push_cmd = [
-            "skopeo",
-            "copy",
-            "--digestfile",
-            digest_file,
+        log.debug("push source image %r", dest_image)
+        copy_image(
             f"oci://{image_output_dir}:latest-source",
             f"docker://{dest_image}",
-        ]
-        log.debug("push source image %r", push_cmd)
-        run(push_cmd, check=True)
+            digest_file=digest_file,
+        )
     with open(digest_file, "r") as f:
         build_result["image_digest"] = f.read().strip()
 
