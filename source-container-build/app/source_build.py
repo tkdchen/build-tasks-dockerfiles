@@ -175,11 +175,11 @@ def fetch_image_manifest(image: str) -> dict | None:
     """
     cmd = ["skopeo", "inspect", "--raw", f"docker://{image}"]
     proc = run(cmd, text=True, capture_output=True)
-    if proc.returncode != 0:
-        if proc.stderr.endswith(" manifest unknown"):
-            return None
-        raise CalledProcessError(proc.returncode, cmd, stderr=proc.stderr)
-    return json.loads(proc.stdout)
+    if proc.returncode == 0:
+        return json.loads(proc.stdout)
+    if proc.stderr.endswith(" manifest unknown"):
+        return None
+    proc.check_returncode()
 
 
 @backoff.on_exception(

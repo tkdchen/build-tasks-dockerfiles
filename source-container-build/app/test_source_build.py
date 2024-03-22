@@ -11,7 +11,7 @@ import unittest
 import zipfile
 from unittest.mock import call, patch, MagicMock, Mock
 from typing import Final
-from subprocess import CalledProcessError
+from subprocess import CalledProcessError, CompletedProcess
 from dataclasses import dataclass
 from tempfile import mkdtemp, mkstemp
 
@@ -1398,7 +1398,7 @@ class TestFetchImageManifest(unittest.TestCase):
     @patch("source_build.run")
     @patch("time.sleep")  # for backoff
     def test_process_failure(self, sleep, run: MagicMock):
-        run.return_value = Mock(returncode=1, stderr="something is wrong")
+        run.return_value = CompletedProcess(["skopeo"], 1, "", "something is wrong")
         with self.assertRaises(CalledProcessError) as ctx:
             _ = source_build.fetch_image_manifest(OUTPUT_BINARY_IMAGE)
         e = ctx.exception
