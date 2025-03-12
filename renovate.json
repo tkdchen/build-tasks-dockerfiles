@@ -8,5 +8,19 @@
       "depNameTemplate": "containers/BuildSourceImage",
       "extractVersionTemplate": "^v(?<version>.*)(: .+)?$"
     }
+  ],
+
+  "packageRules": [
+    {
+      "groupName": "python deps for tests",
+      "description": "Group Python dependencies included for running tests",
+      "matchFileNames": [
+        "**/requirements-dev.in",
+        "**/requirements-dev.txt",
+        "**/requirements-tests?.in",
+        "**/requirements-tests?.txt"
+      ],
+      "matchDatasources": ["pypi"]
+    }
   ]
 }
