@@ -51,14 +51,10 @@ spec:
               set -e
               echo "SNAPSHOT: ${SNAPSHOT}"
               export SOURCE_BUILD_IMAGE=$(jq -r '.components[] | select(.name == "source-container-build") | .containerImage' <<< "$SNAPSHOT")
-              export SBOM_UTILITY_SCRIPTS_IMAGE=$(jq -r '.components[] | select(.name == "sbom-utility-scripts") | .containerImage' <<< "$SNAPSHOT")
               git clone --branch main https://github.com/konflux-ci/e2e-tests.git
               cd e2e-tests/
-              if [[ "${SBOM_UTILITY_SCRIPTS_IMAGE}" != "" && "${SOURCE_BUILD_IMAGE}" != "" ]]; then
-                echo "Testing group PR"
-                make setup-bundle-for-build-tasks-dockerfiles-group-build | tee cmd_output
-              elif [[ "${SOURCE_BUILD_IMAGE}" != "" ]]; then
-                echo "Testing Source Build"
+              if [[ "${SOURCE_BUILD_IMAGE}" != "" ]]; then
+                echo "Setup pipeline bundle replacing source build image"
                 make setup-only-source-build | tee cmd_output
               else
                 echo "[Error] Unknown scenario, execution of e2e-tests is not needed"
