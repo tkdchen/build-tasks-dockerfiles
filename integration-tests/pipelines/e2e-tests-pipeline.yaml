@@ -43,7 +43,7 @@ spec:
             description: "custom bundle for source build pipeline"
         steps:
           - name: e2e-tests
-            image: quay.io/konflux-ci/appstudio-utils:48c311af02858e2422d6229600e9959e496ddef1@sha256:91ddd999271f65d8ec8487b10f3dd378f81aa894e11b9af4d10639fd52bba7e8
+            image: quay.io/konflux-ci/appstudio-utils:1df9af1160526ef9d75cd26809a8ee2ef7c37750@sha256:b923beb77ac0ede219bcacadeeeebba87d78684c11f9b56f9fc75225ded5550e
             env:
             - name: SNAPSHOT
               value: $(params.SNAPSHOT)
