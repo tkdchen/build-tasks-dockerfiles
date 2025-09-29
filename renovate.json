@@ -1,9 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "regexManagers": [
+  "customManagers": [
     {
-      "fileMatch": ["^source-container-build/Dockerfile$"],
-      "matchStrings": ["ARG BSI_VERSION=(?<currentValue>.+?)\\n"],
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^source-container-build/Dockerfile$/"
+      ],
+      "matchStrings": [
+        "ARG BSI_VERSION=(?<currentValue>.+?)\\n"
+      ],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "containers/BuildSourceImage",
       "extractVersionTemplate": "^v(?<version>.*)(: .+)?$"
